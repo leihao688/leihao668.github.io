@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>财富500强企业分布</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/css/main.css">
+    <script src="https://js.arcgis.com/4.28/"></script>
+    <style>
+        html,body{height:100%;margin:0;padding:0}
+        .header{height:60px;background:#005d99;color:white;line-height:60px;padding:0 20px;font-size:20px;}
+        .content{display:flex;height:calc(100% - 60px);}
+        #map{flex:1;}
+        .basemaps{width:240px;background:#f5f5f5;padding:15px;border-left:1px solid #ddd;}
+        .basemap{padding:10px;background:white;margin:6px 0;cursor:pointer;border-radius:4px;}
+        .basemap.active{background:#005d99;color:white;}
+        .reset-btn{position:absolute;top:20px;right:20px;padding:8px 12px;background:#005d99;color:white;border:none;border-radius:4px;cursor:pointer;z-index:999;}
+    </style>
+</head>
+<body>
+    <div class="header">中国财富500强企业分布</div>
+    <div class="content">
+        <div id="map">
+            <button class="reset-btn">重置地图</button>
+        </div>
+        <div class="basemaps">
+            <h3>底图切换</h3>
+            <div class="basemap active" data="gray-vector">灰色底图</div>
+            <div class="basemap" data="streets-vector">街道底图</div>
+            <div class="basemap" data="satellite">影像底图</div>
+            <div class="basemap" data="terrain">地形底图</div>
+        </div>
+    </div>
+
+<script>
+require([
+    "esri/Map","esri/views/MapView","esri/layers/FeatureLayer",
+    "esri/widgets/ScaleBar","esri/widgets/Legend","esri/widgets/Search","esri/widgets/LayerList"
+], function(Map, MapView, FeatureLayer, ScaleBar, Legend, Search, LayerList){
+
+    var map = new Map({ basemap: "gray-vector" });
+
+    var view = new MapView({
+        container: "map",
+        map: map,
+        center: [116, 39],
+        zoom: 4,
+        // 新增：禁止弹窗分页，只单页
+        popup: {
+            paginationEnabled: false
+        }
+    });
+
+    // 面图层 01
+    var areaLayer = new FeatureLayer({
+        url: "https://www.geosceneonline.cn/server/rest/services/Hosted/China_Fortune500_1995_2025/FeatureServer/1",
+        title: "面图层 01",
+        opacity: 0.6
+    });
+    map.add(areaLayer);
+
+    // 点图层 00：保留你原版遍历属性弹窗 + 新增悬浮高亮
+    var pointLayer = new FeatureLayer({
+        url: "https://www.geosceneonline.cn/server/rest/services/Hosted/China_Fortune500_1995_2025/FeatureServer/0",
+        title: "企业点位",
+        opacity: 0.6,
+        popupEnabled: true,
+        popupTemplate: {
+            title: "🏢 企业信息",
+            content: function (feature) {
+                var attr = feature.graphic.attributes;
+                var html = "";
+                for (var key in attr) {
+                    if (attr.hasOwnProperty(key) && 
+                        key !== "OBJECTID" && 
+                        key !== "Shape" && 
+                        key !== "Shape__Area" && 
+                        key !== "Shape__Length") {
+                        html += `<p><strong>${key}：</strong>${attr[key]}</p>`;
+                    }
+                }
+                if (!html) {
+                    html = "<p>暂无数据</p>";
+                }
+                return html;
+            }
+        }
+    });
+    map.add(pointLayer);
+
+    // 工具
+    view.ui.add(new ScaleBar({view:view}), "bottom-left");
+    view.ui.add(new Legend({view:view}), "bottom-right");
+    view.ui.add(new Search({view:view}), "top-left");
+    view.ui.add(new LayerList({view:view}), "top-left");
+
+    // 底图切换【完全保留你原版】
+    document.querySelectorAll('.basemap').forEach(item => {
+        item.addEventListener("click", function(){
+            document.querySelectorAll('.basemap').forEach(i=>i.classList.remove('active'));
+            this.classList.add('active');
+            map.basemap = this.getAttribute("data");
+        });
+    });
+
+    // 重置地图视角【原样保留】
+    document.querySelector(".reset-btn").onclick = function(){
+        view.goTo({center:[116,39],zoom:4});
+    };
+
+    // 面图层悬浮高亮【你原版保留】
+    let highlight;
+    view.on("pointer-move",async function(e){
+        const hit = await view.hitTest(e);
+        if(highlight) highlight.remove();
+        if(hit.results.length > 0 && hit.results[0].layer === areaLayer){
+            highlight = areaLayer.highlight(hit.results[0].graphic);
+        }
+    });
+
+    // 新增互动：点位鼠标悬浮高亮放大
+    let pointHighlight;
+    view.on("pointer-move", async (evt) => {
+        const res = await view.hitTest(evt);
+        if(pointHighlight) pointHighlight.remove();
+        const hitPoint = res.results.find(d => d.layer === pointLayer);
+        if(hitPoint){
+            pointHighlight = pointLayer.highlight(hitPoint.graphic);
+        }
+    });
+
+});
+</script>
+</body>
+</html>
